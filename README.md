@@ -105,11 +105,17 @@ python relay-discord.py --lang es --to English --label Discord
 <summary><b>Per-person captions</b> — <code>relay-discord-bot.py</code> (Discord bot)</summary>
 
 A bot joins your voice channel and hears **each person separately**, so everyone
-gets their own name tag and colour — no audio routing at all.
+gets their own name tag and colour — no audio routing at all. You run it with your
+own free bot token (it's self-hosted — it works while the app is running on your PC).
 
+**Easiest (Windows):** double-click **`setup-discord-bot.bat`** — it installs the
+deps, saves your token, opens the invite link, lists your channels, and starts the
+bot. Just follow the prompts.
+
+**Manual:**
 1. Create a bot at the [Discord Developer Portal](https://discord.com/developers/applications), enable **Server Members Intent**, copy the token into `relay.env` as `DISCORD_BOT_TOKEN=…`.
 2. Invite it (OAuth2 → scope `bot`, perms **View Channels** + **Connect**).
-3. `pip install -r requirements.txt` (uncomment the bot deps first).
+3. `pip install -r requirements.txt`, then:
 ```bash
 python relay-discord-bot.py --list-channels
 python relay-discord-bot.py --channel <channel-id> --to English
