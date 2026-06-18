@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Relay Overlay</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=JetBrains+Mono:wght@500;700&family=Poppins:wght@600;700;800&family=Oswald:wght@500;600;700&family=Roboto+Slab:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --cap:clamp(32px,5vw,70px);
+    --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --weight:800;
+    --track:-0.005em;
+    --capcol:#ffffff;          /* caption text colour */
+    --host:#ffb43f;            /* your captions / chip */
+    --guest:#54d6ff;           /* Discord guests / chip */
+    --alt:#c08bff;
+    --outcol:#000000;          /* outline colour */
+    --outw:0.05em;             /* outline width */
+    --gap:0.45em;              /* spacing between lines */
+    --maxw:26ch;               /* max caption width */
+    --plate-bg:rgba(12,15,21,0.8);
+  }
+  html,body{ margin:0; height:100%; background:transparent; overflow:hidden; font-family:var(--font); }
+  body[data-bg="studio"]{ background:#0b0e13; }
+  body[data-bg="chroma"]{ background:#00b140; }
+
+  #stage{ position:fixed; inset:0; display:flex; padding:6vh 6vw; box-sizing:border-box; }
+  #lines{ display:flex; flex-direction:column; gap:var(--gap); width:100%;
+    margin-top:auto; align-items:center; }            /* bottom by default */
+  body[data-pos="center"] #lines{ margin:auto 0; }
+  body[data-pos="top"]    #lines{ margin-bottom:auto; margin-top:0; }
+  body[data-align="left"]  #lines{ align-items:flex-start; }
+  body[data-align="right"] #lines{ align-items:flex-end; }
+
+  .line{ display:flex; flex-direction:column; align-items:center; gap:.2em;
+    max-width:var(--maxw); transition:opacity .45s ease, transform .45s cubic-bezier(.2,.7,.2,1); }
+  body[data-align="left"]  .line{ align-items:flex-start; }
+  body[data-align="right"] .line{ align-items:flex-end; }
+  .line.enter{ animation:.34s cubic-bezier(.2,.7,.2,1) both; animation-name:rise; }
+  body[data-anim="slide"] .line.enter{ animation-name:slidein; }
+  body[data-anim="pop"]   .line.enter{ animation-name:popin; }
+  body[data-anim="fade"]  .line.enter{ animation-name:fadein; }
+  body[data-anim="none"]  .line.enter{ animation:none; }
+  .line.out{ opacity:0; transform:translateY(-.18em) scale(.985); }
+  @keyframes rise{ from{opacity:0; transform:translateY(.45em)} to{opacity:1; transform:none} }
+  @keyframes slidein{ from{opacity:0; transform:translateX(-.6em)} to{opacity:1; transform:none} }
+  @keyframes popin{ from{opacity:0; transform:scale(.86)} to{opacity:1; transform:none} }
+  @keyframes fadein{ from{opacity:0} to{opacity:1} }
+  @media (prefers-reduced-motion:reduce){ .line.enter{ animation:none } .line{ transition:opacity .2s ease } }
+
+  .meta{ display:flex; align-items:center; gap:.55em; justify-content:center; flex-wrap:wrap; margin-bottom:.04em; }
+  body[data-align="left"]  .meta{ justify-content:flex-start; }
+  body[data-align="right"] .meta{ justify-content:flex-end; }
+  .chip{ font-family:'JetBrains Mono',ui-monospace,monospace; font-weight:700;
+    font-size:.26em; letter-spacing:.14em; text-transform:uppercase; color:#0b0e13;
+    background:var(--spk,var(--host)); padding:.36em .72em; border-radius:.55em; line-height:1;
+    box-shadow:0 .14em .4em #0009, inset 0 1px 0 #ffffff55; }
+  .line[data-ch="guest"] .chip{ background:var(--spk,var(--guest)); }
+  .line[data-ch="alt"]   .chip{ background:var(--spk,var(--alt)); }
+  body[data-chip="off"] .chip{ display:none; }
+  /* right-to-left scripts (Arabic, Hebrew, ...) read correctly */
+  .line[dir="rtl"] .cap{ direction:rtl; }
+  .line[dir="rtl"] .osrc{ direction:rtl; }
+  .osrc{ font-family:'JetBrains Mono',ui-monospace,monospace; font-size:.3em; font-weight:500;
+    color:#ffffffdb; letter-spacing:.005em;
+    text-shadow:0 1px 2px #000, 0 0 .35em #000c; }
+  body[data-showsrc="off"] .osrc{ display:none; }
+
+  /* True outline (paint-order draws the stroke BEHIND the fill) keeps captions
+     crisp over any video — bright gameplay, white scenes, anything. */
+  .cap{ font-size:var(--cap); font-weight:var(--weight); line-height:1.13; text-align:center; color:var(--capcol);
+    text-wrap:balance; letter-spacing:var(--track); padding:.06em .42em; border-radius:.16em;
+    -webkit-text-stroke:var(--outw) var(--outcol); paint-order:stroke fill;
+    text-shadow:0 .05em .2em #000d, 0 .012em .03em #000; }
+  body[data-align="left"]  .cap{ text-align:left; }
+  body[data-align="right"] .cap{ text-align:right; }
+  body[data-caps="on"] .cap{ text-transform:uppercase; }
+  /* "Plate" mode: a soft, blurred translucent pill instead of a hard black box. */
+  body[data-plate="on"] .cap{ -webkit-text-stroke:0; paint-order:normal;
+    background:var(--plate-bg); padding:.18em .58em; border-radius:.26em;
+    box-shadow:0 .2em .8em #0007; backdrop-filter:blur(7px); -webkit-backdrop-filter:blur(7px);
+    text-shadow:0 .04em .12em #000a; }
+
+  #dbg{ position:fixed; top:8px; left:10px; font:12px/1.4 'JetBrains Mono',monospace;
+    color:var(--host); opacity:0; }
+  body[data-debug="on"] #dbg{ opacity:.75; }
+</style>
+</head>
+<body>
+  <div id="stage"><div id="lines"></div></div>
+  <div id="dbg">relay overlay · waiting…</div>
+
+<script>
+(()=>{
+  const qs = new URLSearchParams(location.search);
+  const SIZE = { s:'clamp(20px,3vw,40px)', m:'clamp(26px,4vw,54px)',
+                 l:'clamp(32px,5vw,70px)', xl:'clamp(40px,6.4vw,96px)' };
+  const FONTS = {
+    inter:"'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+    system:"system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+    rounded:"'Poppins','Segoe UI',system-ui,sans-serif",
+    condensed:"'Oswald','Arial Narrow',system-ui,sans-serif",
+    slab:"'Roboto Slab',Georgia,'Times New Roman',serif",
+    mono:"'JetBrains Mono',ui-monospace,'SF Mono',Consolas,monospace"
+  };
+  const TRACK = { tight:'-0.01em', normal:'0', wide:'0.06em' };
+  const OUTW  = { none:'0', thin:'0.03em', med:'0.05em', thick:'0.08em' };
+  const MAXW  = { narrow:'18ch', normal:'26ch', wide:'40ch' };
+  const GAP   = { tight:'0.25em', normal:'0.45em', loose:'0.8em' };
+
+  const BRIDGE = qs.get('bridge') || '';
+  let   HOLD     = parseInt(qs.get('hold')  || '3000', 10);   // ms before a line fades; 0 = keep
+  let   maxLines = parseInt(qs.get('lines') || '2', 10);
+
+  const linesEl = document.getElementById('lines'), dbg = document.getElementById('dbg');
+  const root = document.documentElement.style;
+  let plateCol = '#0c0f15', plateOp = 0.8, autoColor = true;
+  function hexToRgba(hex, a){
+    hex = (hex||'#000000').replace('#','');
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    const n = parseInt(hex,16)||0;
+    return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';
+  }
+
+  function applyConfig(c){
+    if(c.size){ root.setProperty('--cap', SIZE[c.size]||SIZE.l); document.body.dataset.size=c.size; }
+    if(c.pos)     document.body.dataset.pos     = c.pos;
+    if(c.bg)      document.body.dataset.bg      = c.bg;
+    if(c.showsrc) document.body.dataset.showsrc = c.showsrc;
+    if(c.plate)   document.body.dataset.plate   = c.plate;
+    if(c.hold!==undefined  && c.hold!=='')  HOLD = parseInt(c.hold,10)||0;
+    if(c.lines!==undefined && c.lines!=='') { maxLines = parseInt(c.lines,10)||1; trimMap(); }
+    // ---- deep customization ----
+    if(c.font)     root.setProperty('--font',  FONTS[c.font]||FONTS.inter);
+    if(c.weight)   root.setProperty('--weight', c.weight);
+    if(c.caps)     document.body.dataset.caps  = c.caps;
+    if(c.align)    document.body.dataset.align = c.align;
+    if(c.anim)     document.body.dataset.anim  = c.anim;
+    if(c.chip)     document.body.dataset.chip  = c.chip;
+    if(c.tracking) root.setProperty('--track', TRACK[c.tracking]!==undefined?TRACK[c.tracking]:'0');
+    if(c.capcol)   root.setProperty('--capcol', c.capcol);
+    if(c.hostcol)  root.setProperty('--host',  c.hostcol);
+    if(c.guestcol) root.setProperty('--guest', c.guestcol);
+    if(c.outcol)   root.setProperty('--outcol', c.outcol);
+    if(c.outw)     root.setProperty('--outw',  OUTW[c.outw]!==undefined?OUTW[c.outw]:'0.05em');
+    if(c.maxw)     root.setProperty('--maxw',  MAXW[c.maxw]||'26ch');
+    if(c.gap)      root.setProperty('--gap',   GAP[c.gap]||'0.45em');
+    if(c.platecol){ plateCol = c.platecol; }
+    if(c.plateop!==undefined && c.plateop!=='') plateOp = (parseInt(c.plateop,10)||0)/100;
+    if(c.platecol || c.plateop!==undefined) root.setProperty('--plate-bg', hexToRgba(plateCol, plateOp));
+    if(c.autocolor){ autoColor = c.autocolor !== 'off'; if(!autoColor) spkColors.clear(); }
+  }
+  applyConfig({
+    size:    qs.get('size')  || 'l',
+    pos:     qs.get('pos')   || 'bottom',
+    bg:      qs.get('bg')    || 'transparent',
+    showsrc: qs.get('src')   || 'on',
+    plate:   qs.get('plate') || 'off'
+  });
+  if(qs.get('debug')) document.body.dataset.debug = 'on';
+
+  const esc = s => (s+'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+  // Right-to-left scripts: Arabic, Hebrew, Persian/Urdu, Syriac, Thaana.
+  const RTL = /[֐-׿؀-ۿ܀-ݏހ-޿ࢠ-ࣿיִ-﷿ﹰ-﻿]/;
+  // Give each distinct speaker (by label) its own stable colour on the overlay.
+  // Can be turned off (autocolor='off') so all guests use the single guest colour.
+  const PALETTE = ['#ffb43f','#54d6ff','#c08bff','#5be8a0','#ff7eb6','#ffd166','#7aa2ff','#ff9f5b'];
+  const spkColors = new Map();
+  function colorFor(label, channel){
+    if(!label || channel === 'host') return null;   // host always uses the theme colour
+    if(!autoColor) return null;                      // guests share the flat --guest colour
+    if(!spkColors.has(label)){
+      let h = 0; for(let i=0;i<label.length;i++) h = (h*31 + label.charCodeAt(i)) >>> 0;
+      spkColors.set(label, PALETTE[h % PALETTE.length]);
+    }
+    return spkColors.get(label);
+  }
+
+  // Lines are keyed by caption seq so streaming partials update in place instead
+  // of stacking a new line per token; the fade timer starts only on the final.
+  const bySeq = new Map();
+  function upsertLine(m){
+    let el = bySeq.get(m.seq);
+    if(!el){
+      el = document.createElement('div');
+      el.className = 'line enter';
+      el.dataset.ch = m.channel || 'host';
+      const col = colorFor(m.label, m.channel || 'host');
+      if(col) el.style.setProperty('--spk', col);
+      const showSrc = document.body.dataset.showsrc !== 'off';
+      let meta = '';
+      if(m.label)          meta += '<span class="chip">'+esc(m.label)+'</span>';
+      if(showSrc && m.src) meta += '<span class="osrc">'+esc(m.src)+'</span>';
+      el.innerHTML = (meta ? '<div class="meta">'+meta+'</div>' : '') + '<div class="cap"></div>';
+      el._seq = m.seq;
+      bySeq.set(m.seq, el);
+      linesEl.appendChild(el);
+      trimMap();
+    }
+    el.setAttribute('dir', RTL.test(m.dst||'') ? 'rtl' : 'ltr');
+    el.querySelector('.cap').textContent = m.dst || '';
+    if(m.final){
+      clearTimeout(el._t);
+      if(HOLD>0) el._t = setTimeout(()=>{ el.classList.add('out');
+        setTimeout(()=>{ el.remove(); bySeq.delete(el._seq); }, 460); }, HOLD);
+    }
+  }
+  function trimMap(){
+    while(linesEl.children.length>maxLines){
+      const o=linesEl.firstElementChild; clearTimeout(o._t); bySeq.delete(o._seq); o.remove();
+    }
+  }
+  function clearAll(){ [...linesEl.children].forEach(e=>{ clearTimeout(e._t); e.remove(); }); bySeq.clear(); }
+
+  function connect(){
+    const es = new EventSource(BRIDGE + '/stream');
+    es.onopen  = ()=> dbg.textContent = 'relay overlay · connected';
+    es.onerror = ()=> dbg.textContent = 'relay overlay · reconnecting…';
+    es.onmessage = e=>{
+      let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
+      if(m.type==='config')        applyConfig(m);
+      else if(m.type==='caption')  upsertLine(m);
+      else if(m.type==='clear')    clearAll();
+    };
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

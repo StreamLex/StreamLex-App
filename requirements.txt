@@ -1,0 +1,13 @@
+faster-whisper>=1.0.0
+sounddevice>=0.4.6
+numpy>=1.24
+
+# Optional: only needed for `--loopback` in relay-discord.py (capture speaker
+# output directly, no virtual cable). Install with:  pip install soundcard
+# soundcard>=0.4.3
+
+# Optional: only needed for relay-discord-bot.py (per-person Discord captions).
+discord.py>=2.4
+discord-ext-voice-recv>=0.5
+PyNaCl>=1.5.0
+audioop-lts; python_version >= "3.13"   # Python 3.13 removed stdlib audioop

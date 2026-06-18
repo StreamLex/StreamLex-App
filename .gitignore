@@ -1,0 +1,25 @@
+# Secrets — never commit
+relay.env
+.env
+
+# Runtime state
+relay-config.json
+
+# Python / Whisper
+__pycache__/
+*.pyc
+
+# Node / Electron build
+node_modules/
+dist/
+
+# Local tooling / backups (not needed in the public repo)
+.claude/
+relay-stream-translation.zip
+*.exe
+*.dmg
+*.AppImage
+
+# OS
+Thumbs.db
+.DS_Store

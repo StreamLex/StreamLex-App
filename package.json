@@ -1,0 +1,69 @@
+{
+  "name": "relay-stream-translation",
+  "productName": "Relay",
+  "version": "0.1.0",
+  "description": "Live stream translation captions for OBS, Streamlabs and any browser-source app.",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "StreamLex",
+  "main": "desktop/main.js",
+  "scripts": {
+    "bridge": "node relay-bridge.js",
+    "start": "electron .",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir",
+    "postinstall": "node desktop/repair-electron.js"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.relay.stream",
+    "productName": "Relay",
+    "directories": {
+      "buildResources": "desktop/build",
+      "output": "dist"
+    },
+    "files": [
+      "desktop/**",
+      "relay-bridge.js",
+      "relay-control.html",
+      "relay-overlay.html"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Relay-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.video",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "desktop/build/entitlements.mac.plist",
+      "entitlementsInherit": "desktop/build/entitlements.mac.plist"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "StreamLex",
+      "repo": "StreamLex-App"
+    }
+  }
+}

@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Relay — Control</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0e13;--panel:#10151e;--panel-2:#171d29;--line:#26303f;--line-2:#36425640;
+    --edge:#3a4658;
+    /* text — tuned for WCAG AA on the dark panels */
+    --txt:#f1f4f9;--txt-dim:#aab3c2;--txt-faint:#8b95a6;
+    --signal:#ffbb52;--signal-deep:#e8941c;--live:#ff5b52;--ok:#46e39a;
+    --focus:#7cc4ff;
+    --r1:6px;--r2:9px;--r3:12px;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    display:flex;flex-direction:column;overflow:hidden}
+
+  /* accessibility utilities */
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .skip{position:absolute;left:12px;top:-48px;z-index:100;background:var(--signal);color:#1a1205;
+    font-weight:700;font-size:13px;padding:9px 14px;border-radius:var(--r1);
+    transition:top .15s ease}
+  .skip:focus{top:12px}
+
+  /* unified, high-visibility focus ring on every interactive control */
+  a:focus-visible,button:focus-visible,select:focus-visible,
+  textarea:focus-visible,input:focus-visible,
+  .toggle input:focus-visible + .switch{
+    outline:3px solid var(--focus);outline-offset:2px}
+
+  header{display:flex;align-items:center;gap:16px;padding:14px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#121823,#0d1118);flex:0 0 auto}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .dot{width:11px;height:11px;border-radius:50%;background:var(--txt-faint);box-shadow:0 0 0 3px #ffffff0d}
+  body[data-state="live"] .brand .dot{background:var(--live);box-shadow:0 0 14px var(--live);animation:pulse 1.4s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .brand b{font-weight:800;font-size:16px;letter-spacing:.08em}
+  .brand span{font-family:var(--mono);font-size:11px;color:var(--txt-faint);letter-spacing:.2em;text-transform:uppercase}
+  .air{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.22em;padding:6px 11px;border-radius:var(--r1);
+    border:1px solid var(--edge);color:var(--txt-dim);display:flex;align-items:center;gap:7px}
+  .air i{width:7px;height:7px;border-radius:50%;background:currentColor}
+  body[data-state="live"] .air{color:var(--live);border-color:#ff5b5277;background:#ff5b5214}
+  .spacer{flex:1}
+  .pill{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    padding:7px 12px;border-radius:var(--r1);border:1px solid var(--edge);color:var(--txt-dim);display:flex;align-items:center;gap:8px}
+  .pill b{color:var(--txt-faint);font-weight:700}
+  .pill i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+  .pill.good{color:var(--ok);border-color:#46e39a55}
+  .pill.bad{color:var(--live);border-color:#ff5b5255}
+  @media (max-width:620px){.pill{display:none}}
+
+  /* layout: monitor (left) + setup (right) */
+  .wrap{flex:1;display:grid;grid-template-columns:1.3fr .9fr;min-height:0}
+  @media (max-width:880px){.wrap{grid-template-columns:1fr;overflow-y:auto}}
+
+  /* program monitor */
+  .monitor{position:relative;display:flex;flex-direction:column;justify-content:center;
+    padding:clamp(22px,4vh,52px) clamp(26px,4vw,60px);gap:18px;border-right:1px solid var(--line);min-height:0}
+  .mon-label{position:absolute;top:18px;left:26px;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--txt-faint);display:flex;align-items:center;gap:8px}
+  .mon-label i{width:6px;height:6px;border-radius:50%;background:var(--txt-faint)}
+  body[data-state="live"] .mon-label i{background:var(--live);box-shadow:0 0 8px var(--live)}
+  .mon-src{font-family:var(--mono);font-size:clamp(12px,1.4vw,15px);color:var(--txt-dim);line-height:1.55;
+    min-height:1.5em;display:flex;gap:10px;align-items:baseline}
+  .mon-src .tag{color:var(--signal);font-weight:700;letter-spacing:.14em;flex:0 0 auto}
+  .mon-src[data-ch="guest"] .tag{color:#6fdcff}
+  .mon-src.interim .body{color:var(--txt-faint);font-style:italic}
+  .mon-cap{font-size:clamp(26px,3.6vw,46px);font-weight:700;line-height:1.16;letter-spacing:-.01em;
+    text-wrap:balance;max-width:20ch;margin:0;text-shadow:0 2px 24px #00000080}
+  .mon-cap.empty{color:var(--txt-faint);font-weight:600}
+  .mon-cap.enter{animation:rise .32s cubic-bezier(.2,.7,.2,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1}}
+
+  /* setup column */
+  .setup{padding:20px 24px;overflow-y:auto;display:flex;flex-direction:column;gap:0;background:var(--panel)}
+  .grp{padding:18px 0;border-bottom:1px solid var(--line)}
+  .grp:first-child{padding-top:6px}
+  .grp h3{margin:0 0 13px;font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--signal)}
+  .chain{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+  .lang-field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:120px}
+  .lang-field label{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--txt-faint);text-transform:uppercase;padding-left:2px}
+  .selwrap{position:relative}
+  .selwrap::after{content:"▾";position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--txt-dim);font-size:11px;pointer-events:none}
+  select{appearance:none;width:100%;background:var(--panel-2);border:1px solid var(--edge);color:var(--txt);
+    font-family:var(--mono);font-size:13px;font-weight:500;padding:11px 32px 11px 13px;border-radius:var(--r2);cursor:pointer;transition:border-color .15s,background .15s}
+  select:hover{border-color:#46556b;background:#1b2230}
+  .arrow{color:var(--txt-faint);font-size:18px;padding-bottom:10px}
+
+  .meter{display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:16px}
+  .meter i{width:5px;border-radius:1px;background:var(--line);transition:background .06s}
+  .meter i.on{background:var(--ok)} .meter i.on.mid{background:var(--signal)} .meter i.on.hot{background:var(--live)}
+
+  .golive{width:100%;margin-top:14px;appearance:none;border:none;cursor:pointer;font-family:var(--mono);font-weight:700;
+    font-size:14px;letter-spacing:.16em;text-transform:uppercase;padding:15px;border-radius:var(--r3);color:#1a1205;min-height:52px;
+    background:var(--signal);box-shadow:0 6px 24px #ffbb5226,inset 0 1px 0 #ffffff66;transition:background .15s,transform .12s;
+    display:flex;align-items:center;justify-content:center;gap:10px}
+  .golive:hover{background:var(--signal-deep);transform:translateY(-1px)}
+  .golive svg{width:16px;height:16px}
+  body[data-state="live"] .golive{background:var(--live);color:#fff;box-shadow:0 6px 24px #ff5b5238}
+  body[data-state="live"] .golive:hover{background:#e0463d}
+  body[data-state="connecting"] .golive{background:#2a3342;color:var(--txt-dim);pointer-events:none}
+  .kbd{display:block;text-align:center;margin-top:9px;font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.04em;color:var(--txt-faint)}
+  .kbd kbd{background:var(--panel-2);border:1px solid var(--edge);border-bottom-width:2px;border-radius:5px;
+    padding:1px 6px;font-size:10px;color:var(--txt-dim)}
+
+  .seg{display:flex;border:1px solid var(--edge);border-radius:var(--r2);background:var(--panel-2)}
+  .seg button{flex:1;appearance:none;background:transparent;border:none;border-right:1px solid var(--edge);
+    color:var(--txt-dim);font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;padding:11px 4px;min-height:42px;cursor:pointer;transition:color .12s,background .12s}
+  .seg button:first-child{border-radius:var(--r2) 0 0 var(--r2)}
+  .seg button:last-child{border-right:none;border-radius:0 var(--r2) var(--r2) 0}
+  .seg button:hover{color:var(--txt);background:#ffffff0a}
+  .seg button:focus-visible{outline:3px solid var(--focus);outline-offset:-3px;position:relative;z-index:1;color:var(--txt)}
+  .seg button[aria-pressed="true"]{background:var(--signal);color:#1a1205;font-weight:700}
+  .seg+.seglabel{margin-top:14px}
+  .seglabel{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--txt-faint);margin:0 0 7px;display:block}
+  .field{width:100%;background:var(--panel-2);border:1px solid var(--edge);color:var(--txt);
+    font-family:var(--mono);font-size:12.5px;padding:11px 13px;border-radius:var(--r2)}
+  .field::placeholder{color:var(--txt-faint)}
+  .toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--txt-dim);cursor:pointer;padding:10px 0;min-height:44px}
+  .switch{width:46px;height:26px;border-radius:14px;background:#3a4658;position:relative;transition:background .18s;flex:0 0 auto}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .18s;box-shadow:0 1px 3px #0007}
+  /* keep the checkbox keyboard-focusable (was display:none — a11y bug) */
+  .toggle input{position:absolute;width:1px;height:1px;opacity:0;margin:0}
+  .toggle input:checked + .switch{background:var(--signal)}
+  .toggle input:checked + .switch::after{transform:translateX(20px)}
+
+  .urlbox{display:flex;gap:8px}
+  .urlbox input{flex:1;background:var(--panel-2);border:1px solid var(--edge);color:var(--signal);
+    font-family:var(--mono);font-size:12px;padding:11px 13px;border-radius:var(--r2)}
+  .copy{appearance:none;border:1px solid var(--edge);background:var(--panel-2);color:var(--txt);
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:0 16px;border-radius:var(--r2);cursor:pointer;transition:.15s;min-height:44px}
+  .copy:hover{border-color:var(--signal);color:var(--signal)}
+  .copy.done{border-color:var(--ok);color:var(--ok)}
+
+  .row2{display:flex;gap:8px;margin-top:10px}
+  .ghost{flex:1;appearance:none;border:1px solid var(--edge);background:transparent;color:var(--txt-dim);
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:11px;border-radius:var(--r2);cursor:pointer;transition:.15s;min-height:44px}
+  .ghost:hover{color:var(--txt);border-color:#46556b;background:#ffffff06}
+  textarea{width:100%;background:var(--panel-2);border:1px solid var(--edge);color:var(--txt);border-radius:var(--r2);
+    padding:11px 13px;font-family:var(--mono);font-size:12.5px;resize:vertical;line-height:1.5}
+  textarea::placeholder{color:var(--txt-faint)}
+  .hint{font-size:12px;color:var(--txt-faint);line-height:1.65;margin-top:9px}
+  .hint b{color:var(--txt-dim)}
+  .banner{margin:0 0 14px;padding:12px 14px;border-radius:var(--r2);border:1px solid #ff5b5255;background:#ff5b5214;
+    color:#ffb0ab;font-size:12.5px;line-height:1.55;display:none}
+  body[data-key="off"] .banner{display:block}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel-2);
+    border:1px solid var(--edge);color:var(--txt);padding:12px 17px;border-radius:var(--r2);font-size:13.5px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:50;box-shadow:0 10px 40px #000a;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  .toast.err{border-color:#ff5b5288}
+  .toast b{color:var(--signal)}
+
+  .keyrow{display:flex;gap:8px;margin-top:10px}
+  .keyrow .field{flex:1}
+  #selftestOut{display:none;margin-top:11px;padding:11px 13px;border:1px solid var(--line);border-radius:var(--r2);background:var(--panel-2)}
+  .chk{font-family:var(--mono);font-size:12px;line-height:1.7;color:var(--txt-dim);display:flex;gap:7px}
+  .chk b{flex:0 0 1.1em}
+  .chk.ok{color:var(--ok)} .chk.no{color:var(--live)}
+  .chk em{color:var(--txt-faint);font-style:normal}
+
+  /* theme presets + customize panel */
+  .seg.presets button{font-size:10.5px;letter-spacing:.02em;padding:11px 2px}
+  details.adv{margin-top:16px;border:1px solid var(--edge);border-radius:var(--r2);background:#0c111a}
+  details.adv>summary{cursor:pointer;list-style:none;padding:13px 14px;font-family:var(--mono);
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--signal);
+    display:flex;align-items:center;gap:9px;border-radius:var(--r2)}
+  details.adv>summary::-webkit-details-marker{display:none}
+  details.adv>summary::before{content:"+";font-size:15px;line-height:1;color:var(--txt-dim);width:1em;text-align:center}
+  details.adv[open]>summary::before{content:"\2013"}
+  details.adv>summary:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
+  details.adv[open]>summary{border-bottom:1px solid var(--line)}
+  .advbody{padding:6px 14px 16px}
+  .advbody .seglabel{margin-top:14px}
+  .advbody .seglabel:first-child{margin-top:6px}
+  .colorrow{display:flex;gap:8px}
+  .colorpick{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--txt-faint)}
+  .colorpick input[type=color]{width:100%;height:36px;padding:0;border:1px solid var(--edge);
+    border-radius:var(--r1);background:var(--panel-2);cursor:pointer}
+  .colorpick input[type=color]::-webkit-color-swatch-wrapper{padding:3px}
+  .colorpick input[type=color]::-webkit-color-swatch{border:none;border-radius:4px}
+  .plateRow{display:flex;gap:8px;align-items:flex-end}
+
+  /* compact "dock" mode for embedding inside OBS as a Custom Browser Dock */
+  body[data-view="dock"] .monitor{display:none}
+  body[data-view="dock"] .wrap{grid-template-columns:1fr}
+  body[data-view="dock"] .setup{padding:14px 16px;border-left:none}
+  body[data-view="dock"] header{padding:10px 14px;gap:10px}
+  body[data-view="dock"] .brand b{font-size:14px}
+  body[data-view="dock"] .pill{display:none}
+  body[data-view="dock"] .air{font-size:10px;padding:5px 9px}
+
+  /* respect users who prefer less motion */
+  @media (prefers-reduced-motion:reduce){
+    *,*::after,*::before{animation-duration:.001ms!important;animation-iteration-count:1!important;
+      transition-duration:.001ms!important}
+  }
+  /* honour OS high-contrast / forced-colors mode */
+  @media (forced-colors:active){
+    .seg button[aria-pressed="true"]{forced-color-adjust:none;background:Highlight;color:HighlightText}
+    .switch{border:1px solid CanvasText}
+  }
+</style>
+</head>
+<body data-state="idle" data-key="off">
+  <a class="skip" href="#setup">Skip to controls</a>
+
+  <header>
+    <div class="brand"><span class="dot" aria-hidden="true"></span><b>RELAY</b><span>control</span></div>
+    <div class="air" role="status"><i aria-hidden="true"></i><span class="sr-only">Broadcast status: </span><span id="airTxt">STANDBY</span></div>
+    <div class="spacer"></div>
+    <div class="pill" id="enginePill"><i aria-hidden="true"></i><b>engine</b><span id="engineTxt" role="status" aria-live="polite">checking…</span></div>
+    <div class="pill" id="overlayPill"><i aria-hidden="true"></i><b>overlays</b><span id="overlayTxt" role="status" aria-live="polite">0</span></div>
+  </header>
+
+  <div class="wrap">
+    <!-- program monitor -->
+    <section class="monitor" role="region" aria-label="Program monitor — live captions">
+      <div class="mon-label"><i aria-hidden="true"></i>Program monitor</div>
+      <div class="mon-src interim" id="monSrc"><span class="tag">SRC</span><span class="body"></span></div>
+      <p class="mon-cap empty" id="monCap" aria-live="polite" aria-atomic="true">Set your languages, then Go live. This shows exactly what your overlay displays.</p>
+    </section>
+
+    <!-- setup -->
+    <aside class="setup" id="setup">
+      <h1 class="sr-only">Relay control panel</h1>
+      <div class="banner" id="keyBanner" role="region" aria-label="Translation key setup">
+        <b>Translation is off</b> — captions show in the <b>original</b> language. Paste your Anthropic key to turn it on:
+        <div class="keyrow">
+          <input id="keyInput" class="field" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" aria-label="Anthropic API key">
+          <button class="copy" id="keySave" type="button">Save</button>
+        </div>
+        <span class="hint" style="margin-top:7px;display:block">Validated, then stored on the bridge in <b>relay.env</b>. Get one at console.anthropic.com.</span>
+      </div>
+
+      <div class="grp">
+        <h3>Signal chain</h3>
+        <div class="chain">
+          <div class="lang-field">
+            <label for="srcSel">Speaking</label>
+            <div class="selwrap"><select id="srcSel"></select></div>
+          </div>
+          <span class="arrow" aria-hidden="true">→</span>
+          <div class="lang-field">
+            <label for="dstSel">Translate to</label>
+            <div class="selwrap"><select id="dstSel"></select></div>
+          </div>
+        </div>
+        <div class="meter" id="meter" role="img" aria-label="Microphone input level"></div>
+        <button class="golive" id="goBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor" id="goIcon" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          <span id="goTxt">Go live</span>
+        </button>
+        <span class="kbd">Shortcut: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></span>
+
+        <details class="adv" id="micTune" hidden>
+          <summary>Mic tuning (in-app voice)</summary>
+          <div class="advbody">
+            <div class="seglabel" id="lblPre">Word-start buffer — raise if first words get clipped</div>
+            <div class="seg" id="prerollSeg" role="group" aria-labelledby="lblPre">
+              <button type="button" data-v="200">0.2s</button><button type="button" data-v="300" aria-pressed="true">0.3s</button>
+              <button type="button" data-v="450">0.45s</button><button type="button" data-v="600">0.6s</button>
+            </div>
+            <div class="seglabel" id="lblEnd">End-of-phrase pause — lower = snappier, higher = fewer cut-offs</div>
+            <div class="seg" id="endsilSeg" role="group" aria-labelledby="lblEnd">
+              <button type="button" data-v="300">0.3s</button><button type="button" data-v="400" aria-pressed="true">0.4s</button>
+              <button type="button" data-v="600">0.6s</button><button type="button" data-v="800">0.8s</button>
+            </div>
+            <div class="seglabel" id="lblSens">Sensitivity — High picks up soft speech (and more noise)</div>
+            <div class="seg" id="sensSeg" role="group" aria-labelledby="lblSens">
+              <button type="button" data-v="0.020">Low</button><button type="button" data-v="0.012" aria-pressed="true">Normal</button>
+              <button type="button" data-v="0.007">High</button>
+            </div>
+            <p class="hint">Applies to your in-app microphone. Changes take effect next time you press Go live.</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="grp">
+        <h3>Overlay look</h3>
+
+        <div class="seglabel" id="lblTheme">Theme — one-click starting point</div>
+        <div class="seg presets" id="themeSeg" role="group" aria-labelledby="lblTheme">
+          <button type="button" data-theme="clean" aria-pressed="true">Clean</button>
+          <button type="button" data-theme="bold">Bold</button>
+          <button type="button" data-theme="subtitle">Subtitle</button>
+          <button type="button" data-theme="minimal">Minimal</button>
+          <button type="button" data-theme="neon">Neon</button>
+        </div>
+
+        <div class="seglabel" id="lblSize">Caption size</div>
+        <div class="seg" id="sizeSeg" role="group" aria-labelledby="lblSize">
+          <button type="button" data-v="s">S</button><button type="button" data-v="m">M</button>
+          <button type="button" data-v="l" aria-pressed="true">L</button><button type="button" data-v="xl">XL</button>
+        </div>
+        <div class="seglabel" id="lblPos">Position</div>
+        <div class="seg" id="posSeg" role="group" aria-labelledby="lblPos">
+          <button type="button" data-v="top">Top</button><button type="button" data-v="center">Center</button>
+          <button type="button" data-v="bottom" aria-pressed="true">Bottom</button>
+        </div>
+        <div class="seglabel" id="lblBg">Backdrop</div>
+        <div class="seg" id="bgSeg" role="group" aria-labelledby="lblBg">
+          <button type="button" data-v="transparent" aria-pressed="true">Transparent</button>
+          <button type="button" data-v="studio">Studio</button><button type="button" data-v="chroma">Chroma</button>
+        </div>
+        <div class="seglabel" id="lblHold">Auto-hide caption</div>
+        <div class="seg" id="holdSeg" role="group" aria-labelledby="lblHold">
+          <button type="button" data-v="0">Keep</button><button type="button" data-v="2000" aria-pressed="true">2s</button>
+          <button type="button" data-v="3000">3s</button><button type="button" data-v="5000">5s</button><button type="button" data-v="8000">8s</button>
+        </div>
+        <div class="seglabel" id="lblLines">On screen at once</div>
+        <div class="seg" id="linesSeg" role="group" aria-labelledby="lblLines">
+          <button type="button" data-v="1">1 line</button><button type="button" data-v="2" aria-pressed="true">2 lines</button>
+          <button type="button" data-v="3">3 lines</button>
+        </div>
+        <label class="seglabel" for="hostLabel">Your name tag (optional)</label>
+        <input id="hostLabel" class="field" type="text" placeholder="e.g. You — leave blank for none">
+        <p class="hint">Your friends on Discord get captioned by <b>relay-discord.py</b> (see the README) and show up here with their own tag and colour.</p>
+        <label class="toggle">Show original line<input type="checkbox" id="srcToggle" checked><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle">Dark plate behind text<input type="checkbox" id="plateToggle"><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle">Show name tags<input type="checkbox" id="chipToggle" checked><span class="switch" aria-hidden="true"></span></label>
+        <label class="toggle">Mask strong language<input type="checkbox" id="cleanToggle"><span class="switch" aria-hidden="true"></span></label>
+
+        <details class="adv" id="advLook">
+          <summary>Customize appearance</summary>
+          <div class="advbody">
+            <label class="seglabel" for="fontSel">Font</label>
+            <div class="selwrap"><select id="fontSel">
+              <option value="inter">Inter — clean sans</option>
+              <option value="system">System UI</option>
+              <option value="rounded">Poppins — rounded</option>
+              <option value="condensed">Oswald — condensed</option>
+              <option value="slab">Roboto Slab — serif</option>
+              <option value="mono">JetBrains Mono</option>
+            </select></div>
+
+            <div class="seglabel" id="lblWeight">Weight</div>
+            <div class="seg" id="weightSeg" role="group" aria-labelledby="lblWeight">
+              <button type="button" data-v="500">Light</button><button type="button" data-v="700">Regular</button>
+              <button type="button" data-v="800" aria-pressed="true">Bold</button><button type="button" data-v="900">Heavy</button>
+            </div>
+
+            <div class="seglabel" id="lblTrack">Letter spacing</div>
+            <div class="seg" id="trackingSeg" role="group" aria-labelledby="lblTrack">
+              <button type="button" data-v="tight">Tight</button><button type="button" data-v="normal" aria-pressed="true">Normal</button>
+              <button type="button" data-v="wide">Wide</button>
+            </div>
+
+            <div class="seglabel" id="lblAlign">Alignment</div>
+            <div class="seg" id="alignSeg" role="group" aria-labelledby="lblAlign">
+              <button type="button" data-v="left">Left</button><button type="button" data-v="center" aria-pressed="true">Center</button>
+              <button type="button" data-v="right">Right</button>
+            </div>
+
+            <label class="toggle">UPPERCASE captions<input type="checkbox" id="capsToggle"><span class="switch" aria-hidden="true"></span></label>
+            <label class="toggle">Auto-colour each speaker<input type="checkbox" id="autocolorToggle" checked><span class="switch" aria-hidden="true"></span></label>
+
+            <div class="seglabel">Colours <span style="color:var(--txt-faint)">(Guests applies when auto-colour is off)</span></div>
+            <div class="colorrow">
+              <label class="colorpick">Text<input type="color" id="capcolPick" value="#ffffff"></label>
+              <label class="colorpick">You<input type="color" id="hostcolPick" value="#ffb43f"></label>
+              <label class="colorpick">Guests<input type="color" id="guestcolPick" value="#54d6ff"></label>
+              <label class="colorpick">Outline<input type="color" id="outcolPick" value="#000000"></label>
+            </div>
+
+            <div class="seglabel" id="lblOutw">Outline width</div>
+            <div class="seg" id="outwSeg" role="group" aria-labelledby="lblOutw">
+              <button type="button" data-v="none">None</button><button type="button" data-v="thin">Thin</button>
+              <button type="button" data-v="med" aria-pressed="true">Medium</button><button type="button" data-v="thick">Thick</button>
+            </div>
+
+            <div class="seglabel" id="lblAnim">Entrance animation</div>
+            <div class="seg" id="animSeg" role="group" aria-labelledby="lblAnim">
+              <button type="button" data-v="rise" aria-pressed="true">Rise</button><button type="button" data-v="slide">Slide</button>
+              <button type="button" data-v="pop">Pop</button><button type="button" data-v="fade">Fade</button><button type="button" data-v="none">None</button>
+            </div>
+
+            <div class="seglabel" id="lblMaxw">Caption width</div>
+            <div class="seg" id="maxwSeg" role="group" aria-labelledby="lblMaxw">
+              <button type="button" data-v="narrow">Narrow</button><button type="button" data-v="normal" aria-pressed="true">Normal</button>
+              <button type="button" data-v="wide">Wide</button>
+            </div>
+
+            <div class="seglabel" id="lblGap">Line spacing</div>
+            <div class="seg" id="gapSeg" role="group" aria-labelledby="lblGap">
+              <button type="button" data-v="tight">Tight</button><button type="button" data-v="normal" aria-pressed="true">Normal</button>
+              <button type="button" data-v="loose">Loose</button>
+            </div>
+
+            <div class="seglabel" id="lblPlate">Plate colour &amp; opacity <span style="color:var(--txt-faint)">(when plate is on)</span></div>
+            <div class="plateRow">
+              <label class="colorpick" style="flex:0 0 56px">Plate<input type="color" id="platecolPick" value="#0c0f15"></label>
+              <div class="seg" id="plateopSeg" role="group" aria-labelledby="lblPlate" style="flex:1">
+                <button type="button" data-v="40">40%</button><button type="button" data-v="60">60%</button>
+                <button type="button" data-v="80" aria-pressed="true">80%</button><button type="button" data-v="100">100%</button>
+              </div>
+            </div>
+
+            <button class="ghost" id="resetLook" type="button" style="margin-top:14px">Reset to default look</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="grp">
+        <h3>Add to your streaming app</h3>
+        <label class="sr-only" for="overlayUrl">Overlay browser-source URL</label>
+        <div class="urlbox">
+          <input id="overlayUrl" readonly>
+          <button class="copy" id="copyBtn" type="button" aria-label="Copy overlay URL">Copy</button>
+        </div>
+        <div class="row2">
+          <button class="ghost" id="openOverlay" type="button">Preview overlay</button>
+          <button class="ghost" id="clearBtn" type="button">Clear captions</button>
+          <button class="ghost" id="selftestBtn" type="button">Self-test</button>
+        </div>
+        <div id="selftestOut" role="status" aria-live="polite"></div>
+        <p class="hint">In OBS / Streamlabs / XSplit / vMix: add a <b>Browser Source</b> and paste this URL. Keep <b>Transparent</b> backdrop so it sits over your scene. <b>Chroma</b> gives a green key if your app needs it.</p>
+
+        <label class="seglabel" for="dockUrl" style="margin-top:14px">Control from inside OBS</label>
+        <div class="urlbox">
+          <input id="dockUrl" readonly>
+          <button class="copy" id="dockCopyBtn" type="button" aria-label="Copy OBS dock URL">Copy</button>
+        </div>
+        <p class="hint">Paste this into OBS → <b>View → Docks → Custom Browser Docks</b> to control everything (language + style) without leaving OBS.</p>
+      </div>
+
+      <div class="grp" style="border-bottom:none">
+        <h3>Manual caption</h3>
+        <label class="sr-only" for="manualIn">Manual caption text</label>
+        <textarea id="manualIn" rows="2" placeholder="Type a line to push to the overlay — handy for testing or reading chat aloud."></textarea>
+        <button class="ghost" id="manualSend" type="button" style="margin-top:8px">Push line</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+(()=>{
+  "use strict";
+  // ?dock=1 → compact layout for use as an OBS Custom Browser Dock
+  if(new URLSearchParams(location.search).get("dock")) document.body.dataset.view="dock";
+  const SRC_LANGS=[
+    ["en-US","English (US)","English"],["en-GB","English (UK)","English"],
+    ["es-ES","Spanish (Spain)","Spanish"],["es-MX","Spanish (Mexico)","Spanish"],
+    ["fr-FR","French","French"],["de-DE","German","German"],["it-IT","Italian","Italian"],
+    ["pt-BR","Portuguese (Brazil)","Portuguese"],["pt-PT","Portuguese (Portugal)","Portuguese"],
+    ["nl-NL","Dutch","Dutch"],["ru-RU","Russian","Russian"],["ja-JP","Japanese","Japanese"],
+    ["ko-KR","Korean","Korean"],["zh-CN","Chinese (Mandarin)","Mandarin Chinese"],
+    ["zh-HK","Chinese (Cantonese)","Cantonese"],["ar-SA","Arabic","Arabic"],
+    ["hi-IN","Hindi","Hindi"],["pl-PL","Polish","Polish"],["tr-TR","Turkish","Turkish"],
+    ["sv-SE","Swedish","Swedish"],["nb-NO","Norwegian","Norwegian"],["da-DK","Danish","Danish"],
+    ["fi-FI","Finnish","Finnish"],["el-GR","Greek","Greek"],["cs-CZ","Czech","Czech"],
+    ["uk-UA","Ukrainian","Ukrainian"],["ro-RO","Romanian","Romanian"],["hu-HU","Hungarian","Hungarian"],
+    ["th-TH","Thai","Thai"],["vi-VN","Vietnamese","Vietnamese"],["id-ID","Indonesian","Indonesian"],
+    ["he-IL","Hebrew","Hebrew"],["ms-MY","Malay","Malay"],["fil-PH","Filipino","Filipino"]
+  ];
+  const DST_LANGS=["English","Spanish","French","German","Italian","Portuguese","Dutch","Russian",
+    "Japanese","Korean","Chinese (Simplified)","Chinese (Traditional)","Cantonese","Arabic","Hindi",
+    "Bengali","Urdu","Persian","Polish","Turkish","Swedish","Norwegian","Danish","Finnish","Greek",
+    "Czech","Ukrainian","Romanian","Hungarian","Thai","Vietnamese","Indonesian","Hebrew","Malay",
+    "Filipino","Tamil","Telugu","Swahili","Tagalog"];
+
+  const $=s=>document.querySelector(s), body=document.body;
+  const srcSel=$("#srcSel"), dstSel=$("#dstSel");
+  SRC_LANGS.forEach(([c,l])=>{const o=document.createElement("option");o.value=c;o.textContent=l;srcSel.appendChild(o)});
+  DST_LANGS.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;dstSel.appendChild(o)});
+  srcSel.value="en-US"; dstSel.value="Spanish";
+  const srcName=()=>{const m=SRC_LANGS.find(l=>l[0]===srcSel.value);return m?m[2]:"the source language"};
+
+  const meter=$("#meter"), SEGS=16, segEls=[];
+  for(let i=0;i<SEGS;i++){const b=document.createElement("i");b.style.height=(7+i*1.2)+"px";meter.appendChild(b);segEls.push(b)}
+
+  function toast(m,err){const t=$("#toast");t.innerHTML=m;t.classList.toggle("err",!!err);t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),3600)}
+
+  // ---- config / overlay url ----
+  const DEFAULTS={size:"l",pos:"bottom",bg:"transparent",showsrc:"on",plate:"off",hold:"2000",lines:"2",clean:"off",
+    font:"inter",weight:"800",caps:"off",align:"center",anim:"rise",chip:"on",tracking:"normal",
+    capcol:"#ffffff",hostcol:"#ffb43f",guestcol:"#54d6ff",outcol:"#000000",outw:"med",
+    maxw:"normal",gap:"normal",platecol:"#0c0f15",plateop:"80",autocolor:"on"};
+  // appearance keys that "Reset to default look" restores (not size/pos/timing)
+  const LOOK_KEYS=["font","weight","caps","align","anim","chip","tracking","capcol","hostcol",
+    "guestcol","outcol","outw","maxw","gap","platecol","plateop","plate","autocolor"];
+  const cfg=Object.assign({},DEFAULTS);
+  // one-click themes set a bunch of keys at once
+  const THEMES={
+    clean:   {font:"inter",weight:"800",caps:"off",tracking:"normal",align:"center",anim:"rise",outw:"med",outcol:"#000000",capcol:"#ffffff",plate:"off",chip:"on"},
+    bold:    {font:"rounded",weight:"900",caps:"on",tracking:"normal",align:"center",anim:"pop",outw:"thick",outcol:"#000000",capcol:"#ffffff",plate:"off",chip:"on"},
+    subtitle:{font:"system",weight:"700",caps:"off",tracking:"normal",align:"center",anim:"fade",outw:"thin",outcol:"#000000",capcol:"#ffffff",plate:"on",platecol:"#000000",plateop:"70",chip:"off"},
+    minimal: {font:"inter",weight:"600",caps:"off",tracking:"wide",align:"center",anim:"fade",outw:"thin",outcol:"#000000",capcol:"#ffffff",plate:"off",chip:"off"},
+    neon:    {font:"condensed",weight:"700",caps:"on",tracking:"wide",align:"center",anim:"slide",outw:"med",outcol:"#10002b",capcol:"#aef6ff",hostcol:"#ff4fd8",guestcol:"#7cf6ff",plate:"off",chip:"on"}
+  };
+  const FONTS={
+    inter:"'Inter',system-ui,sans-serif",system:"system-ui,-apple-system,'Segoe UI',Roboto,sans-serif",
+    rounded:"'Poppins','Segoe UI',system-ui,sans-serif",condensed:"'Oswald','Arial Narrow',sans-serif",
+    slab:"'Roboto Slab',Georgia,serif",mono:"'JetBrains Mono',ui-monospace,monospace"};
+  const TRACKV={tight:"-0.01em",normal:"0",wide:"0.06em"};
+  const debounce=(fn,ms)=>{let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}};
+  function overlayUrl(){
+    const p=new URLSearchParams({size:cfg.size,pos:cfg.pos,bg:cfg.bg,src:cfg.showsrc,plate:cfg.plate,hold:cfg.hold,lines:cfg.lines});
+    return location.origin+"/overlay?"+p.toString();
+  }
+  function refreshUrl(){$("#overlayUrl").value=overlayUrl();$("#dockUrl").value=location.origin+"/control?dock=1"}
+  async function pushConfig(){
+    refreshUrl();
+    savePrefs();
+    updatePreview();
+    try{await fetch("/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)})}catch(e){}
+  }
+  const pushSoon=debounce(pushConfig,140);   // for colour sliders (avoid spamming /config)
+
+  // ---- live typography/colour preview in the program monitor ----
+  function updatePreview(){
+    const cap=$("#monCap"), tag=$("#monSrc").querySelector(".tag");
+    cap.style.fontFamily=FONTS[cfg.font]||"";
+    cap.style.fontWeight=cfg.weight;
+    cap.style.textTransform=cfg.caps==="on"?"uppercase":"none";
+    cap.style.letterSpacing=TRACKV[cfg.tracking]||"";
+    cap.style.color=cfg.capcol;
+    cap.style.textAlign=cfg.align;
+    if(tag) tag.style.color=($("#monSrc").dataset.ch==="guest"?cfg.guestcol:cfg.hostcol);
+  }
+
+  // ---- remember the operator's setup between sessions ----
+  const PREFS="relay.prefs.v1";
+  function savePrefs(){
+    try{localStorage.setItem(PREFS,JSON.stringify({
+      src:srcSel.value,dst:dstSel.value,label:hostLabelEl.value,cfg}))}catch(e){}
+  }
+  function setSeg(id,val){const w=$(id);if(!w)return;
+    [...w.children].forEach(x=>x.setAttribute("aria-pressed",x.dataset.v===val?"true":"false"))}
+  // push every control's UI to match cfg (used by restore / theme / reset)
+  function syncAllControls(){
+    setSeg("#sizeSeg",cfg.size);setSeg("#posSeg",cfg.pos);setSeg("#bgSeg",cfg.bg);
+    setSeg("#holdSeg",cfg.hold);setSeg("#linesSeg",cfg.lines);
+    setSeg("#weightSeg",cfg.weight);setSeg("#trackingSeg",cfg.tracking);setSeg("#alignSeg",cfg.align);
+    setSeg("#outwSeg",cfg.outw);setSeg("#animSeg",cfg.anim);setSeg("#maxwSeg",cfg.maxw);
+    setSeg("#gapSeg",cfg.gap);setSeg("#plateopSeg",cfg.plateop);
+    const f=$("#fontSel");if(f)f.value=cfg.font;
+    $("#srcToggle").checked=cfg.showsrc!=="off";$("#plateToggle").checked=cfg.plate==="on";
+    $("#cleanToggle").checked=cfg.clean==="on";$("#capsToggle").checked=cfg.caps==="on";
+    $("#chipToggle").checked=cfg.chip!=="off";$("#autocolorToggle").checked=cfg.autocolor!=="off";
+    $("#capcolPick").value=cfg.capcol;$("#hostcolPick").value=cfg.hostcol;
+    $("#guestcolPick").value=cfg.guestcol;$("#outcolPick").value=cfg.outcol;$("#platecolPick").value=cfg.platecol;
+    setSeg("#themeSeg","");   // themes are starting points; clear the pressed mark on tweak
+  }
+  function restorePrefs(){
+    let p;try{p=JSON.parse(localStorage.getItem(PREFS))}catch(e){}if(!p)return;
+    if(p.src&&[...srcSel.options].some(o=>o.value===p.src))srcSel.value=p.src;
+    if(p.dst&&[...dstSel.options].some(o=>o.value===p.dst))dstSel.value=p.dst;
+    if(typeof p.label==="string")hostLabelEl.value=p.label;
+    if(p.cfg){Object.assign(cfg,p.cfg);syncAllControls();}
+  }
+  function seg(id,key,after){const w=$(id);if(!w)return;w.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    [...w.children].forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+    cfg[key]=b.dataset.v;setSeg("#themeSeg","");after&&after();pushConfig()})}
+  seg("#sizeSeg","size");seg("#posSeg","pos");seg("#bgSeg","bg");seg("#holdSeg","hold");seg("#linesSeg","lines");
+  seg("#weightSeg","weight");seg("#trackingSeg","tracking");seg("#alignSeg","align");seg("#outwSeg","outw");
+  seg("#animSeg","anim");seg("#maxwSeg","maxw");seg("#gapSeg","gap");seg("#plateopSeg","plateop");
+  const hostLabelEl=$("#hostLabel");
+  $("#srcToggle").onchange=e=>{cfg.showsrc=e.target.checked?"on":"off";pushConfig()};
+  $("#plateToggle").onchange=e=>{cfg.plate=e.target.checked?"on":"off";pushConfig()};
+  $("#cleanToggle").onchange=e=>{cfg.clean=e.target.checked?"on":"off";pushConfig()};
+  $("#capsToggle").onchange=e=>{cfg.caps=e.target.checked?"on":"off";setSeg("#themeSeg","");pushConfig()};
+  $("#chipToggle").onchange=e=>{cfg.chip=e.target.checked?"on":"off";setSeg("#themeSeg","");pushConfig()};
+  $("#autocolorToggle").onchange=e=>{cfg.autocolor=e.target.checked?"on":"off";setSeg("#themeSeg","");pushConfig()};
+  $("#fontSel").onchange=e=>{cfg.font=e.target.value;setSeg("#themeSeg","");pushConfig()};
+
+  // colour pickers — live preview now, debounced network push
+  function bindColor(id,key){const el=$(id);el.addEventListener("input",()=>{cfg[key]=el.value;setSeg("#themeSeg","");updatePreview();pushSoon()})}
+  bindColor("#capcolPick","capcol");bindColor("#hostcolPick","hostcol");bindColor("#guestcolPick","guestcol");
+  bindColor("#outcolPick","outcol");bindColor("#platecolPick","platecol");
+
+  // theme presets set many keys at once
+  $("#themeSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    [...e.currentTarget.children].forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+    Object.assign(cfg,THEMES[b.dataset.theme]||{});syncAllControls();
+    b.setAttribute("aria-pressed","true");pushConfig()});
+
+  $("#resetLook").onclick=()=>{LOOK_KEYS.forEach(k=>cfg[k]=DEFAULTS[k]);syncAllControls();pushConfig();toast("Overlay look reset to default.")};
+
+  function copyToBtn(btn,text,input){return async()=>{try{await navigator.clipboard.writeText(text());const b=$(btn);b.textContent="Copied";b.classList.add("done");setTimeout(()=>{b.textContent="Copy";b.classList.remove("done")},1400)}catch(e){const i=$(input);i.select();document.execCommand("copy")}}}
+  $("#copyBtn").onclick=copyToBtn("#copyBtn",overlayUrl,"#overlayUrl");
+  $("#dockCopyBtn").onclick=copyToBtn("#dockCopyBtn",()=>location.origin+"/control?dock=1","#dockUrl");
+  $("#openOverlay").onclick=()=>window.open(overlayUrl()+"&bg=studio&debug=1","_blank");
+  $("#clearBtn").onclick=()=>fetch("/clear",{method:"POST"}).then(()=>{renderMon("","",true)});
+
+  // ---- save the Anthropic key straight from here (no file editing) ----
+  async function saveKey(){
+    const key=$("#keyInput").value.trim();
+    if(!key){toast("Paste your key first.",true);return}
+    const btn=$("#keySave"),old=btn.textContent;btn.disabled=true;btn.textContent="Checking…";
+    try{
+      const r=await fetch("/setkey",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});
+      const d=await r.json();
+      if(d.ok){toast("Translation on"+(d.saved?" — key saved to relay.env.":"."));$("#keyInput").value="";pollStatus()}
+      else toast(d.error||"Key rejected.",true);
+    }catch(e){toast("Bridge unreachable — is relay-bridge.js running?",true)}
+    btn.disabled=false;btn.textContent=old;
+  }
+  $("#keySave").onclick=saveKey;
+  $("#keyInput").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();saveKey()}});
+
+  // ---- one-click self-test ----
+  async function runSelfTest(){
+    const out=$("#selftestOut");out.style.display="block";
+    out.innerHTML='<div class="chk">… running checks</div>';
+    const rows=[];
+    try{
+      const s=await (await fetch("/selftest")).json();
+      rows.push(["Bridge reachable",true,""]);
+      rows.push(["Translation key",!!s.key,s.key?("on · "+(s.model||"")):"paste your key at the top"]);
+      rows.push(["Overlay connected",s.overlays>0,s.overlays+" connected"+(s.overlays?"":" — add the Browser Source in OBS")]);
+    }catch(e){rows.push(["Bridge reachable",false,"is relay-bridge.js still running?"])}
+    rows.push(["Live mic in this browser",!!SR,SR?"Chrome/Edge ready":"open in Chrome or Edge"]);
+    const x=s=>(s+"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+    out.innerHTML=rows.map(r=>`<div class="chk ${r[1]?'ok':'no'}"><b>${r[1]?'✓':'✕'}</b><span>${x(r[0])}${r[2]?' <em>— '+x(r[2])+'</em>':''}</span></div>`).join("");
+  }
+  $("#selftestBtn").onclick=runSelfTest;
+
+  // ---- monitor render (driven by SSE, authoritative) ----
+  const monSrc=$("#monSrc").querySelector(".body"), monSrcRow=$("#monSrc"), monCap=$("#monCap");
+  const monTag=$("#monSrc").querySelector(".tag");
+  function renderInterim(t){monSrc.textContent=t;monSrcRow.classList.add("interim");
+    monSrcRow.dataset.ch="host";monTag.textContent=hostLabelEl.value.trim()||"SRC";monTag.style.color=cfg.hostcol}
+  function renderMon(src,dst,clear,label,channel){
+    if(clear){monCap.textContent="Cleared.";monCap.classList.add("empty");monSrc.textContent="";return}
+    monSrcRow.classList.remove("interim");monSrcRow.dataset.ch=channel||"host";
+    monTag.textContent=label||(channel==="guest"?"GUEST":"SRC");
+    monTag.style.color=(channel==="guest"?cfg.guestcol:cfg.hostcol);
+    monSrc.textContent=src||"";
+    monCap.classList.remove("empty");monCap.textContent=dst||"";
+    monCap.classList.remove("enter");void monCap.offsetWidth;monCap.classList.add("enter");
+  }
+
+  // ---- bridge SSE (status + program feed) ----
+  let lastSeq=null;
+  function connectSSE(){
+    const es=new EventSource("/stream");
+    es.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
+      // partial (streaming) and final updates share a seq — show the latest text
+      if(m.type==="caption"){if(m.partial||m.final||m.seq!==lastSeq){lastSeq=m.seq;renderMon(m.src,m.dst,false,m.label,m.channel)}}
+      else if(m.type==="clear")renderMon("","",true);
+      else if(m.type==="notice")toast(m.msg,true);
+    };
+    es.onerror=()=>{};
+  }
+  connectSSE();
+
+  async function pollStatus(){
+    try{const r=await fetch("/status");const s=await r.json();
+      body.dataset.key=s.key?"on":"off";
+      const ep=$("#enginePill");ep.classList.toggle("good",s.key);ep.classList.toggle("bad",!s.key);
+      let txt=s.key?"on":"no key";
+      if(s.key&&typeof s.cacheHits==="number"&&(s.translations||s.cacheHits))
+        txt+=" · "+s.cacheHits+" cached";
+      $("#engineTxt").textContent=txt;
+      $("#engineTxt").title=s.key?("model "+(s.model||"")+" · "+(s.translations||0)+" translated · "+(s.cacheHits||0)+" cache hits · "+(s.errors||0)+" errors"):"";
+      $("#overlayTxt").textContent=s.clients;
+    }catch(e){$("#engineTxt").textContent="bridge offline";$("#enginePill").classList.add("bad")}
+  }
+  pollStatus();setInterval(pollStatus,4000);
+
+  // ---- send caption to bridge ----
+  let ctr=0;
+  async function sendCaption(text){
+    const seq=Date.now()*1000+(++ctr);
+    try{await fetch("/caption",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text,srcName:srcName(),dst:dstSel.value,seq,channel:"host",label:hostLabelEl.value.trim()})})}
+    catch(e){toast("Bridge unreachable — is relay-bridge.js still running?",true)}
+  }
+
+  // ---- speech recognition ----
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let active=false,recog=null,audioCtx=null,micStream=null,raf=0;
+  function startRecog(){
+    if(!SR){toast("Live mic needs <b>Chrome</b> or <b>Edge</b>. The manual box still works.",true);return false}
+    recog=new SR();recog.continuous=true;recog.interimResults=true;recog.lang=srcSel.value;
+    recog.onresult=ev=>{let interim="",finals="";
+      for(let i=ev.resultIndex;i<ev.results.length;i++){const r=ev.results[i];
+        if(r.isFinal)finals+=r[0].transcript;else interim+=r[0].transcript}
+      if(interim)renderInterim(interim.trim());
+      if(finals.trim()){renderInterim(finals.trim());sendCaption(finals.trim())}};
+    recog.onerror=ev=>{if(ev.error==="not-allowed"||ev.error==="service-not-allowed"){toast("Microphone blocked — allow mic access for this page.",true);stop()}
+      else if(ev.error==="network")toast("Speech service network error. Retrying…",true)};
+    recog.onend=()=>{if(active){try{recog.start()}catch(e){}}};
+    try{recog.start()}catch(e){}return true;
+  }
+  async function startMeter(){
+    try{micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      const s=audioCtx.createMediaStreamSource(micStream),an=audioCtx.createAnalyser();
+      an.fftSize=256;an.smoothingTimeConstant=.75;s.connect(an);
+      const data=new Uint8Array(an.frequencyBinCount);
+      const loop=()=>{an.getByteFrequencyData(data);let sum=0;for(let i=0;i<data.length;i++)sum+=data[i];
+        const lit=Math.round(Math.min(1,(sum/data.length)/90)*SEGS);
+        segEls.forEach((el,i)=>{const on=i<lit;el.classList.toggle("on",on);
+          el.classList.toggle("mid",on&&i>=SEGS*.55);el.classList.toggle("hot",on&&i>=SEGS*.82)});
+        raf=requestAnimationFrame(loop)};loop();
+    }catch(e){}
+  }
+  function stopMeter(){cancelAnimationFrame(raf);segEls.forEach(el=>el.classList.remove("on","mid","hot"));
+    if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null}if(audioCtx){audioCtx.close().catch(()=>{});audioCtx=null}}
+
+  // ---- desktop own-voice via bundled whisper.cpp (Electron has no Web Speech) ----
+  const DESKTOP=!!(window.relayDesktop&&window.relayDesktop.isDesktop);
+  let wCtx=null,wStream=null,wNode=null,whisperReady=false,whisperState="idle";
+  if(DESKTOP){
+    window.relayDesktop.whisperState().then(s=>{whisperState=s;whisperReady=(s==="ready")});
+    let lastPct=-1;
+    window.relayDesktop.onWhisperStatus(s=>{whisperState=s.state;
+      if(s.state==="downloading"){const pct=Math.round((s.pct||0)*100);
+        if(pct>=lastPct+10||pct>=100){lastPct=pct;toast("Preparing speech engine ("+(s.what==="model"?"voice model":"engine")+")… "+pct+"%")}}
+      else if(s.state==="ready"){whisperReady=true;lastPct=-1;toast("Speech engine ready ✓")}
+      else if(s.state==="unsupported"){toast("In-app mic isn't supported on this OS yet — use the manual box.",true)}
+      else if(s.state==="error"){whisperReady=false;toast("Speech engine error: "+(s.msg||""),true)}});
+  }
+  // adjustable mic/VAD tuning (desktop in-app voice), persisted locally
+  const MICPREFS="relay.mic.v1", mic={preroll:300,endsil:400,sens:0.012};
+  try{Object.assign(mic,JSON.parse(localStorage.getItem(MICPREFS)||"{}"))}catch(e){}
+  function saveMic(){try{localStorage.setItem(MICPREFS,JSON.stringify(mic))}catch(e){}}
+  function micSeg(id,key,parse){const w=$(id);if(!w)return;w.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+    [...w.children].forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");
+    mic[key]=parse(b.dataset.v);saveMic()})}
+  if(DESKTOP){
+    $("#micTune").hidden=false;
+    micSeg("#prerollSeg","preroll",v=>parseInt(v,10));
+    micSeg("#endsilSeg","endsil",v=>parseInt(v,10));
+    micSeg("#sensSeg","sens",v=>parseFloat(v));
+    setSeg("#prerollSeg",String(mic.preroll));setSeg("#endsilSeg",String(mic.endsil));setSeg("#sensSeg",String(mic.sens));
+  }
+  function concatF32(arr){let n=0;for(const a of arr)n+=a.length;const o=new Float32Array(n);let p=0;for(const a of arr){o.set(a,p);p+=a.length}return o}
+  function to16k(seg,srate){if(srate===16000)return seg;const r=srate/16000,n=Math.floor(seg.length/r),o=new Float32Array(n);for(let i=0;i<n;i++)o[i]=seg[Math.floor(i*r)];return o}
+  // Streaming capture: transcribe the growing phrase WHILE you speak (interims),
+  // so captions appear ~1s in instead of ~1.5s after you stop. One transcription
+  // runs at a time; busy interims are dropped, the final is always sent.
+  let wBusy=false,pendingFinal=null;
+  async function startWhisper(){
+    wStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+    wCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+    const src=wCtx.createMediaStreamSource(wStream),node=wCtx.createScriptProcessor(2048,1,1);
+    const SRATE=wCtx.sampleRate,FRAME=2048;
+    const SIL=Math.round((mic.endsil/1000)/(FRAME/SRATE)),MIN=Math.round(SRATE*0.3),MAX=Math.round(SRATE*14),INTERIM=Math.round(SRATE*0.7);
+    const PRE=Math.max(1,Math.round((mic.preroll/1000)/(FRAME/SRATE)));   // tunable pre-roll so word onsets aren't clipped
+    const thr=mic.sens;
+    let triggered=false,voiced=[],silence=0,uSeq=0,lastLen=0,preroll=[];
+    node.onaudioprocess=e=>{const inp=e.inputBuffer.getChannelData(0);const buf=new Float32Array(inp.length);buf.set(inp);
+      let sum=0;for(let i=0;i<buf.length;i++)sum+=buf[i]*buf[i];const speech=Math.sqrt(sum/buf.length)>thr;
+      if(!triggered){
+        preroll.push(buf);if(preroll.length>PRE)preroll.shift();   // keep a rolling pre-roll while quiet
+        if(speech){triggered=true;voiced=preroll.concat([buf]);preroll=[];silence=0;uSeq=Date.now()*1000+(++ctr);lastLen=0}}
+      else{voiced.push(buf);silence=speech?0:silence+1;const len=voiced.length*FRAME;
+        if(len-lastLen>=INTERIM&&len>=MIN){lastLen=len;queueTranscribe(concatF32(voiced),SRATE,uSeq,true)}
+        if(silence>SIL||len>MAX){const seg=concatF32(voiced);triggered=false;voiced=[];silence=0;
+          if(seg.length>=MIN)queueTranscribe(seg,SRATE,uSeq,false)}}};
+    src.connect(node);node.connect(wCtx.destination);wNode=node;
+  }
+  function queueTranscribe(seg,srate,seq,interim){
+    if(wBusy){if(!interim)pendingFinal={seg,srate,seq};return}   // drop busy interims, defer final
+    runTranscribe(seg,srate,seq,interim);
+  }
+  async function runTranscribe(seg,srate,seq,interim){
+    wBusy=true;const lang=(srcSel.value||"en").split("-")[0];
+    let text="";try{text=await window.relayDesktop.transcribe(to16k(seg,srate),16000,lang)}catch(e){}
+    text=(text||"").trim();if(text){renderInterim(text);sendCaptionSeq(text,seq,interim)}
+    wBusy=false;
+    if(pendingFinal){const p=pendingFinal;pendingFinal=null;runTranscribe(p.seg,p.srate,p.seq,false)}
+  }
+  async function sendCaptionSeq(text,seq,interim){
+    try{await fetch("/caption",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text,srcName:srcName(),dst:dstSel.value,seq,channel:"host",label:hostLabelEl.value.trim(),interim:!!interim})})}
+    catch(e){toast("Bridge unreachable — is relay-bridge.js still running?",true)}
+  }
+  function stopWhisper(){wBusy=false;pendingFinal=null;if(wNode){try{wNode.disconnect();wNode.onaudioprocess=null}catch(e){}wNode=null}
+    if(wStream){wStream.getTracks().forEach(t=>t.stop());wStream=null}if(wCtx){wCtx.close().catch(()=>{});wCtx=null}}
+
+  function setState(s){body.dataset.state=s;
+    $("#airTxt").textContent=s==="live"?"ON AIR":s==="connecting"?"CONNECTING":"STANDBY";
+    $("#goTxt").textContent=s==="live"?"Stop":s==="connecting"?"Starting…":"Go live";
+    $("#goIcon").innerHTML=s==="live"?'<rect x="6" y="6" width="12" height="12" rx="2"/>':'<path d="M8 5v14l11-7z"/>'}
+  async function go(){if(active)return stop();setState("connecting");active=true;
+    if(DESKTOP){
+      if(whisperState==="unsupported"){toast("In-app mic isn't supported on this OS yet.",true);active=false;setState("idle");return}
+      if(!whisperReady){const s=await window.relayDesktop.whisperState();whisperState=s;whisperReady=(s==="ready");
+        if(!whisperReady){toast(s==="downloading"?"Speech engine still downloading — try again shortly.":"Speech engine not ready yet — one moment.",true);active=false;setState("idle");return}}
+      try{await startWhisper()}catch(e){toast("Microphone blocked — allow mic access.",true);active=false;setState("idle");return}
+      await startMeter();setState("live");return}
+    const ok=startRecog();if(!ok&&!SR){active=false;setState("idle");return}await startMeter();setState("live")}
+  function stop(){active=false;if(DESKTOP)stopWhisper();if(recog){try{recog.stop()}catch(e){}recog=null}stopMeter();setState("idle")}
+  $("#goBtn").onclick=go;
+  srcSel.onchange=()=>{savePrefs();if(active&&recog){recog.lang=srcSel.value;try{recog.stop()}catch(e){}}};
+  dstSel.onchange=()=>{cfg.targetLang=dstSel.value;savePrefs();pushConfig()};
+  hostLabelEl.addEventListener("input",savePrefs);
+  // Hotkey: Ctrl/Cmd+Shift+L toggles Go live / Stop (ignored while typing).
+  document.addEventListener("keydown",e=>{
+    if((e.metaKey||e.ctrlKey)&&e.shiftKey&&(e.key==="L"||e.key==="l")){
+      if(/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
+      e.preventDefault();go();}});
+
+  function manual(){const v=$("#manualIn").value.trim();if(!v)return;renderInterim(v);sendCaption(v);$("#manualIn").value=""}
+  $("#manualSend").onclick=manual;
+  $("#manualIn").addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key==="Enter")manual()});
+
+  restorePrefs();
+  if(!cfg.targetLang) cfg.targetLang=dstSel.value;   // global language follows the dropdown
+  refreshUrl();pushConfig();
+  if(!SR&&!DESKTOP)toast("Tip: open this window in <b>Chrome</b> or <b>Edge</b> for live mic.",false);
+})();
+</script>
+</body>
+</html>

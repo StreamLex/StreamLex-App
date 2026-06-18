@@ -1,0 +1,41 @@
+name: build-desktop
+
+# Builds signed installers and publishes them to a GitHub Release.
+# Trigger by pushing a version tag, e.g.:  git tag v0.1.0 && git push --tags
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build & publish installer
+        run: npx electron-builder --publish always
+        env:
+          # GitHub release upload (provided automatically)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # --- Windows code signing (set these repo secrets to enable) ---
+          # CSC_LINK = base64 of your .pfx;  CSC_KEY_PASSWORD = its password
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+
+          # --- macOS code signing + notarization (set to enable) ---
+          # APPLE_API_KEY etc. or Apple ID app-specific password below
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

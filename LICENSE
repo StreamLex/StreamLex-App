@@ -1,0 +1,73 @@
+Relay Software License
+Source-Available, Free to Use, No Redistribution
+
+Copyright (c) 2026 StreamLex. All rights reserved.
+
+This license governs use of the accompanying software, including its source
+code, binaries, assets, and documentation (the "Software"). By downloading,
+installing, copying, building, or using the Software, you ("You") agree to the
+terms below. If you do not agree, do not use the Software.
+
+1. GRANT OF RIGHTS
+   Subject to the restrictions in Section 2, the copyright holder grants You a
+   worldwide, royalty-free, non-exclusive, non-transferable, revocable license
+   to:
+   (a) download, install, and run the Software for personal use and for your
+       own live-streaming, content-creation, and translation purposes, whether
+       personal or commercial streaming activity;
+   (b) view and study the source code; and
+   (c) modify the source code and build it solely for your own use as permitted
+       in (a).
+
+   The Software relies on third-party services (such as a translation API) that
+   You must supply and pay for yourself, under their own terms.
+
+2. RESTRICTIONS
+   Except as expressly permitted in Section 1, You may NOT:
+   (a) sell, rent, lease, sublicense, distribute, publish, or otherwise make the
+       Software (in source or binary form, modified or unmodified) available to
+       any third party;
+   (b) host or offer the Software, or a modified version of it, as a paid or
+       public service or product;
+   (c) use the Software, its source code, or its design to create, market, or
+       distribute a competing product or service;
+   (d) remove, alter, or obscure any copyright, trademark, or attribution
+       notices; or
+   (e) use the names, logos, or branding of the Software or its author to promote
+       derived works without prior written permission.
+
+3. CONTRIBUTIONS
+   If You submit changes, suggestions, or code to the project (e.g., via pull
+   request), You grant the copyright holder a perpetual, irrevocable, worldwide,
+   royalty-free license to use, modify, and incorporate those contributions into
+   the Software and to relicense them.
+
+4. RESERVATION OF RIGHTS
+   All rights not expressly granted in this license are reserved by the copyright
+   holder. No ownership of the Software is transferred to You. Commercial
+   redistribution or licensing rights are available only by separate written
+   agreement with the copyright holder.
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+   OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+   OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. TERMINATION
+   This license terminates automatically if You breach any of its terms. Upon
+   termination You must stop using the Software and destroy all copies in your
+   possession. Sections 4, 5, 6, and 8 survive termination.
+
+8. GENERAL
+   This license is the entire agreement regarding the Software and may be updated
+   for future versions. If any provision is held unenforceable, the remaining
+   provisions remain in effect.
+
+For commercial licensing, redistribution rights, or other permissions, contact
+the copyright holder.
