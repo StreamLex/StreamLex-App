@@ -63,7 +63,8 @@
     "publish": {
       "provider": "github",
       "owner": "StreamLex",
-      "repo": "StreamLex-App"
+      "repo": "StreamLex-App",
+      "releaseType": "prerelease"
     }
   }
 }
