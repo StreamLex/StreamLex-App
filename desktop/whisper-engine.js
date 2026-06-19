@@ -17,10 +17,23 @@ const cp   = require('child_process');
 const WHISPER_REL = 'v1.8.7';
 const BIN_URL = `https://github.com/ggml-org/whisper.cpp/releases/download/${WHISPER_REL}/whisper-bin-x64.zip`;
 const MODELS = {
-  tiny:  { file: 'ggml-tiny.bin',  mb: 75  },
-  base:  { file: 'ggml-base.bin',  mb: 148 },
-  small: { file: 'ggml-small.bin', mb: 488 }
+  tiny:  { file: 'ggml-tiny.bin',  mb: 75   },
+  base:  { file: 'ggml-base.bin',  mb: 148  },
+  small: { file: 'ggml-small.bin', mb: 488  },
+  medium:{ file: 'ggml-medium.bin', mb: 1530 },
+  'large-v3-turbo': { file: 'ggml-large-v3-turbo.bin', mb: 1620 }
 };
+// Pick the best model the machine can comfortably run — no UI knob, just the best
+// default for your hardware. More cores → bigger, more accurate multilingual model.
+function bestDefaultModel(){
+  const cores = os.cpus().length;
+  if (cores >= 12) return 'large-v3-turbo';   // most accurate, fast-ish "turbo" decoder
+  if (cores >= 8)  return 'medium';
+  if (cores >= 4)  return 'small';
+  return 'base';
+}
+const DEFAULT_MODEL = bestDefaultModel();
+const BEAM = 5;                  // beam search → noticeably more accurate decoding
 const modelUrl = name => `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${MODELS[name].file}?download=true`;
 
 function downloadFile(url, dest, onProgress, redirects = 0){
@@ -50,6 +63,7 @@ class WhisperEngine {
     this.dir = path.join(dataDir, 'whisper');
     this.port = 8910;
     this.proc = null;
+    this.model = null;
     this.state = 'idle';                       // idle | downloading | starting | ready | error | unsupported
     this.onStatus = () => {};
   }
@@ -57,7 +71,24 @@ class WhisperEngine {
   binDir(){ return path.join(this.dir, 'bin', 'Release'); }
   serverExe(){ return path.join(this.binDir(), 'whisper-server.exe'); }
   modelPath(name){ return path.join(this.dir, MODELS[name].file); }
-  setStatus(state, extra){ this.state = state; try { this.onStatus({ state, ...extra }); } catch(_){} }
+  setStatus(state, extra){ this.state = state; try { this.onStatus({ state, model: this.model, ...extra }); } catch(_){} }
+
+  // remember the user's chosen quality (model) across launches
+  modelFile(){ return path.join(this.dir, 'model.txt'); }
+  preferredModel(){
+    const env = process.env.RELAY_WHISPER_MODEL;                 // optional override, no UI
+    if (env && MODELS[env]) return env;
+    try { const m = fs.readFileSync(this.modelFile(), 'utf8').trim(); if (MODELS[m]) return m; } catch(_){}
+    return DEFAULT_MODEL;
+  }
+  savePreferred(name){ try { fs.mkdirSync(this.dir, { recursive: true }); fs.writeFileSync(this.modelFile(), name); } catch(_){} }
+  async setModel(name){
+    if (!MODELS[name]) return false;
+    this.savePreferred(name);
+    if (name === this.model && this.state === 'ready') return true;
+    this.stop();
+    return this.start(name);
+  }
 
   async ensure(model){
     fs.mkdirSync(this.dir, { recursive: true });
@@ -80,16 +111,22 @@ class WhisperEngine {
     }
   }
 
-  async start(model = 'base'){
+  async start(model){
+    if (!model) model = this.preferredModel();
+    if (!MODELS[model]) model = DEFAULT_MODEL;
+    this.model = model;
     if (this.unsupported()){ this.setStatus('unsupported'); return false; }
     try {
       await this.ensure(model);
       this.setStatus('starting');
       const threads = Math.max(2, Math.min(os.cpus().length, 8));   // more threads = faster inference
-      this.proc = cp.spawn(this.serverExe(),
-        ['-m', this.modelPath(model), '--host', '127.0.0.1', '--port', String(this.port), '-t', String(threads)],
+      const child = cp.spawn(this.serverExe(),
+        ['-m', this.modelPath(model), '--host', '127.0.0.1', '--port', String(this.port),
+         '-t', String(threads), '-bs', String(BEAM)],
         { cwd: this.binDir(), windowsHide: true });
-      this.proc.on('exit', () => { this.proc = null; if (this.state !== 'idle') this.setStatus('error', { msg: 'engine stopped' }); });
+      this.proc = child;
+      // only react to THIS child's exit (a model switch starts a new one)
+      child.on('exit', () => { if (this.proc === child){ this.proc = null; if (this.state !== 'idle') this.setStatus('error', { msg: 'engine stopped' }); } });
       await this.waitReady(40000);
       this.setStatus('ready');
       return true;

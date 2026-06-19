@@ -222,7 +222,7 @@ def main():
     ap.add_argument("--label", default="Discord", help="name tag shown on the overlay")
     ap.add_argument("--channel", default="guest", help="'guest' (coloured) or 'host'")
     ap.add_argument("--bridge", default="http://localhost:4455", help="Relay bridge URL")
-    ap.add_argument("--model", default="base",
+    ap.add_argument("--model", default="small",
                     help="whisper model: tiny / base / small / medium / large-v3 (bigger = better + slower)")
     ap.add_argument("--gpu", action="store_true", help="use an NVIDIA GPU (CUDA) instead of CPU")
     ap.add_argument("--threshold", type=float, default=0.0, help="voice level (0 = auto-calibrate)")
@@ -287,7 +287,7 @@ def main():
             try:
                 segments, info = model.transcribe(
                     seg, language=(None if args.lang == "auto" else args.lang),
-                    vad_filter=True, beam_size=1)
+                    vad_filter=True, beam_size=5)
                 text = " ".join(s.text.strip() for s in segments).strip()
                 if text:
                     nm = src_name_fixed or LANG_NAMES.get(getattr(info, "language", ""), "the source language")

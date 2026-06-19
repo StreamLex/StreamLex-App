@@ -6,7 +6,6 @@ const path = require('path');
 const { WhisperEngine } = require('./whisper-engine');
 
 const PORT = 4455;
-const WHISPER_MODEL = 'base';   // tiny | base | small  (own-voice accuracy vs speed/size)
 
 // The packaged app folder is read-only, so point the bridge's writable files
 // (relay.env, relay-config.json) at a per-user data directory. Must be set
@@ -74,6 +73,8 @@ if (!app.requestSingleInstanceLock()) {
 
   // ---- own-voice speech IPC (renderer ↔ whisper.cpp engine) ----
   ipcMain.handle('whisper:state', () => whisper.state);
+  ipcMain.handle('whisper:model', () => whisper.model || whisper.preferredModel());
+  ipcMain.handle('whisper:setModel', (_e, name) => whisper.setModel(name));
   ipcMain.handle('whisper:transcribe', async (_e, { pcm, sampleRate, lang }) => {
     if (whisper.state !== 'ready') return '';
     return whisper.transcribe(new Float32Array(pcm), sampleRate, lang);
@@ -84,7 +85,7 @@ if (!app.requestSingleInstanceLock()) {
     createWindow();
 
     // Download (first run) + launch the speech engine in the background.
-    whisper.start(WHISPER_MODEL).catch(() => {});
+    whisper.start().catch(() => {});
 
     // Auto-update only matters in a packaged, signed build; ignore failures in dev.
     if (app.isPackaged) {

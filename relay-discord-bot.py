@@ -109,7 +109,7 @@ def main():
     ap.add_argument("--token", help="bot token (or DISCORD_BOT_TOKEN in relay.env)")
     ap.add_argument("--to", default="English", help="translate captions into this language")
     ap.add_argument("--lang", default="auto", help="spoken language code or 'auto'")
-    ap.add_argument("--model", default="base", help="whisper model: tiny/base/small/medium/large-v3")
+    ap.add_argument("--model", default="small", help="whisper model: tiny/base/small/medium/large-v3 (bigger = more accurate)")
     ap.add_argument("--gpu", action="store_true", help="use an NVIDIA GPU (CUDA) instead of CPU")
     ap.add_argument("--bridge", default="http://localhost:4455", help="Relay bridge URL")
     args = ap.parse_args()
@@ -157,7 +157,7 @@ def main():
             try:
                 segments, info = model.transcribe(
                     audio, language=(None if args.lang == "auto" else args.lang),
-                    vad_filter=True, beam_size=1)
+                    vad_filter=True, beam_size=5)
                 text = " ".join(s.text.strip() for s in segments).strip()
                 if text:
                     nm = src_name_fixed or LANG_NAMES.get(getattr(info, "language", ""), "the source language")

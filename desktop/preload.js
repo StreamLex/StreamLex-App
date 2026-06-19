@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('relayDesktop', {
 
   // own-voice speech engine (whisper.cpp, runs in the main process)
   whisperState: () => ipcRenderer.invoke('whisper:state'),
+  whisperModel: () => ipcRenderer.invoke('whisper:model'),
+  setWhisperModel: name => ipcRenderer.invoke('whisper:setModel', name),
   // pcm: Float32Array; we hand its ArrayBuffer to the main process
   transcribe: (pcm, sampleRate, lang) =>
     ipcRenderer.invoke('whisper:transcribe', { pcm: pcm.buffer, sampleRate, lang }),
