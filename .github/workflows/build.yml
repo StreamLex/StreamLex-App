@@ -7,6 +7,12 @@ on:
     tags: ['v*']
   workflow_dispatch: {}
 
+# Allow the built-in GITHUB_TOKEN to create the Release and upload assets.
+# Without this, `electron-builder --publish always` fails with 403 and no
+# installer is ever published.
+permissions:
+  contents: write
+
 jobs:
   release:
     # Windows-only for now: the app's own-voice engine (whisper.cpp + CUDA) is
