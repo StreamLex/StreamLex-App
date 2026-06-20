@@ -9,9 +9,13 @@ on:
 
 jobs:
   release:
+    # Windows-only for now: the app's own-voice engine (whisper.cpp + CUDA) is
+    # Windows-only, so a macOS build produces a non-functional app. Re-add
+    # macos-latest here once Mac is actually supported + signing is configured.
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
