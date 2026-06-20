@@ -1,7 +1,7 @@
 {
   "name": "relay-stream-translation",
   "productName": "Relay",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Live stream translation captions for OBS, Streamlabs and any browser-source app.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "StreamLex",
