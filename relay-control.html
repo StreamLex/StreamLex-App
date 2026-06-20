@@ -753,7 +753,7 @@
     wCtx=new (window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
     const src=wCtx.createMediaStreamSource(wStream),node=wCtx.createScriptProcessor(2048,1,1);
     const SRATE=wCtx.sampleRate,FRAME=2048;
-    const SIL=Math.round((mic.endsil/1000)/(FRAME/SRATE)),MIN=Math.round(SRATE*0.3),MAX=Math.round(SRATE*14),INTERIM=Math.round(SRATE*0.7);
+    const SIL=Math.round((mic.endsil/1000)/(FRAME/SRATE)),MIN=Math.round(SRATE*0.3),MAX=Math.round(SRATE*14),INTERIM=Math.round(SRATE*0.7),IWIN=Math.round(SRATE*8);
     const PRE=Math.max(1,Math.round((mic.preroll/1000)/(FRAME/SRATE)));   // tunable pre-roll so word onsets aren't clipped
     const thr=mic.sens;
     let triggered=false,voiced=[],silence=0,uSeq=0,lastLen=0,preroll=[];
@@ -763,7 +763,8 @@
         preroll.push(buf);if(preroll.length>PRE)preroll.shift();   // keep a rolling pre-roll while quiet
         if(speech){triggered=true;voiced=preroll.concat([buf]);preroll=[];silence=0;uSeq=Date.now()*1000+(++ctr);lastLen=0}}
       else{voiced.push(buf);silence=speech?0:silence+1;const len=voiced.length*FRAME;
-        if(len-lastLen>=INTERIM&&len>=MIN){lastLen=len;queueTranscribe(concatF32(voiced),SRATE,uSeq,true)}
+        if(len-lastLen>=INTERIM&&len>=MIN){lastLen=len;const full=concatF32(voiced);   // interim: only the last ~8s, not the whole phrase (keeps cost flat)
+          queueTranscribe(full.length>IWIN?full.subarray(full.length-IWIN):full,SRATE,uSeq,true)}
         if(silence>SIL||len>MAX){const seg=concatF32(voiced);triggered=false;voiced=[];silence=0;
           if(seg.length>=MIN)queueTranscribe(seg,SRATE,uSeq,false)}}};
     src.connect(node);node.connect(wCtx.destination);wNode=node;
