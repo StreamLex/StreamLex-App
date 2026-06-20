@@ -1,5 +1,7 @@
 <div align="center">
 
+** Give me your feedback trough X : https://x.com/StreamLexReal
+
 # Relay
 
 ### Live, translated subtitles for your stream — your voice *and* your Discord friends, in real time.
