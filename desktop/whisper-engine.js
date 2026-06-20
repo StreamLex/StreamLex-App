@@ -23,17 +23,18 @@ const MODELS = {
   medium:{ file: 'ggml-medium.bin', mb: 1530 },
   'large-v3-turbo': { file: 'ggml-large-v3-turbo.bin', mb: 1620 }
 };
-// Pick the best model the machine can comfortably run — no UI knob, just the best
-// default for your hardware. More cores → bigger, more accurate multilingual model.
+// Pick the best model the machine can run while staying snappy for LIVE captions —
+// no UI knob. 'small' is the sweet spot (fast + good multilingual accuracy); lighter
+// machines step down. Heavier models exist but add too much latency for live use
+// (override with RELAY_WHISPER_MODEL if you ever want max accuracy over speed).
 function bestDefaultModel(){
   const cores = os.cpus().length;
-  if (cores >= 12) return 'large-v3-turbo';   // most accurate, fast-ish "turbo" decoder
-  if (cores >= 8)  return 'medium';
-  if (cores >= 4)  return 'small';
-  return 'base';
+  if (cores >= 8) return 'medium';  // more accurate, kept direct via greedy decoding
+  if (cores >= 6) return 'small';
+  if (cores >= 4) return 'base';
+  return 'tiny';
 }
 const DEFAULT_MODEL = bestDefaultModel();
-const BEAM = 5;                  // beam search → noticeably more accurate decoding
 const modelUrl = name => `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${MODELS[name].file}?download=true`;
 
 function downloadFile(url, dest, onProgress, redirects = 0){
@@ -120,9 +121,11 @@ class WhisperEngine {
       await this.ensure(model);
       this.setStatus('starting');
       const threads = Math.max(2, Math.min(os.cpus().length, 8));   // more threads = faster inference
+      // greedy decoding (no beam search) keeps live captions snappy; the model
+      // size carries the accuracy.
       const child = cp.spawn(this.serverExe(),
         ['-m', this.modelPath(model), '--host', '127.0.0.1', '--port', String(this.port),
-         '-t', String(threads), '-bs', String(BEAM)],
+         '-t', String(threads)],
         { cwd: this.binDir(), windowsHide: true });
       this.proc = child;
       // only react to THIS child's exit (a model switch starts a new one)
